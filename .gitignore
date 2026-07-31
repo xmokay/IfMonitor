@@ -1,0 +1,5 @@
+publish
+src/IfMonitor/bin/
+src/IfMonitor/obj/
+tools/BuildIcon/bin
+tools/BuildIcon/obj
