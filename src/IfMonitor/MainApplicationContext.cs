@@ -11,7 +11,6 @@ public sealed class MainApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _recoverItem;
     private readonly Icon _okIcon;
     private readonly Icon _alertIcon;
-    private readonly Icon _dimIcon;
     private readonly System.Windows.Forms.Timer _blinkTimer;
     private readonly TimeSpan _balloonCooldown = TimeSpan.FromSeconds(30);
     private readonly Dictionary<string, (AdapterHealth Health, DateTime Utc)> _lastBalloon = new(StringComparer.OrdinalIgnoreCase);
@@ -24,7 +23,6 @@ public sealed class MainApplicationContext : ApplicationContext
         _config = ConfigStore.Load();
         _okIcon = TrayIconFactory.CreateOk();
         _alertIcon = TrayIconFactory.CreateAlert();
-        _dimIcon = TrayIconFactory.CreateAlertAlt();
 
         _blinkTimer = new System.Windows.Forms.Timer { Interval = 500 };
         _blinkTimer.Tick += OnBlinkTick;
@@ -357,7 +355,7 @@ public sealed class MainApplicationContext : ApplicationContext
         }
 
         _blinkPhase = !_blinkPhase;
-        _tray.Icon = _blinkPhase ? _dimIcon : _alertIcon;
+        _tray.Icon = _blinkPhase ? _okIcon : _alertIcon;
     }
 
     private void SetTrayIdle()
@@ -375,7 +373,6 @@ public sealed class MainApplicationContext : ApplicationContext
         _tray.Dispose();
         _okIcon.Dispose();
         _alertIcon.Dispose();
-        _dimIcon.Dispose();
         base.ExitThreadCore();
     }
 

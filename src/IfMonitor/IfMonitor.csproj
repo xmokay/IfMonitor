@@ -15,6 +15,11 @@
     <ApplicationIcon>Assets\IfMonitor.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\icon.png" />
+    <EmbeddedResource Include="Assets\icon-alert.png" />
+  </ItemGroup>
+
   <Target Name="GenerateAppIcon" BeforeTargets="BeforeBuild">
     <Exec Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)..\..\tools\BuildIcon\BuildIcon.csproj&quot; -- &quot;$(MSBuildProjectDirectory)\Assets&quot;" />
   </Target>

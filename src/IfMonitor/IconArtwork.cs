@@ -5,44 +5,18 @@ using System.Runtime.InteropServices;
 
 namespace IfMonitor;
 
-/// <summary>Draws the app icon with a real alpha channel (no baked checkerboard).</summary>
+/// <summary>Loads separate green/red NIC artwork PNGs (no runtime color replacement).</summary>
 public static class IconArtwork
 {
-    public static readonly Color OkBarColor = Color.FromArgb(255, 34, 197, 94);
-    public static readonly Color AlertBarColor = Color.FromArgb(255, 220, 60, 60);
-    public static readonly Color AlertAltBarColor = Color.FromArgb(255, 230, 140, 0);
+    private const string OkResourceName = "IfMonitor.Assets.icon.png";
+    private const string AlertResourceName = "IfMonitor.Assets.icon-alert.png";
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr hIcon);
 
-    public static Bitmap Render(int size, Color? barColor = null)
+    public static Icon ToIcon(int size, bool alert = false)
     {
-        Color fill = barColor ?? OkBarColor;
-        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bmp);
-        g.Clear(Color.Transparent);
-        g.SmoothingMode = SmoothingMode.None;
-        g.PixelOffsetMode = PixelOffsetMode.Half;
-        g.CompositingQuality = CompositingQuality.HighSpeed;
-
-        float margin = size * 0.08f;
-        float inner = size - margin * 2;
-        float gap = inner * 0.10f;
-        float barW = (inner - gap * 2) / 3f;
-        float x0 = margin;
-        float baseY = margin + inner;
-
-        using var brush = new SolidBrush(fill);
-        g.FillRectangle(brush, x0, baseY - inner * 0.42f, barW, inner * 0.42f);
-        g.FillRectangle(brush, x0 + barW + gap, baseY - inner * 0.68f, barW, inner * 0.68f);
-        g.FillRectangle(brush, x0 + (barW + gap) * 2, baseY - inner * 0.94f, barW, inner * 0.94f);
-
-        return bmp;
-    }
-
-    public static Icon ToIcon(int size, Color? barColor = null)
-    {
-        using var bmp = Render(size, barColor);
+        using var bmp = Render(size, alert);
         IntPtr handle = bmp.GetHicon();
         try
         {
@@ -53,5 +27,37 @@ public static class IconArtwork
         {
             DestroyIcon(handle);
         }
+    }
+
+    public static Bitmap Render(int size, bool alert = false)
+    {
+        using var source = LoadMaster(alert);
+        var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(bmp);
+        g.Clear(Color.Transparent);
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        g.SmoothingMode = SmoothingMode.HighQuality;
+        g.DrawImage(source, new Rectangle(0, 0, size, size));
+        return bmp;
+    }
+
+    private static Bitmap LoadMaster(bool alert)
+    {
+        string resource = alert ? AlertResourceName : OkResourceName;
+        using Stream? stream = typeof(IconArtwork).Assembly.GetManifestResourceStream(resource);
+        if (stream is not null)
+        {
+            return new Bitmap(stream);
+        }
+
+        string fileName = alert ? "icon-alert.png" : "icon.png";
+        string fallback = Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
+        if (File.Exists(fallback))
+        {
+            return new Bitmap(fallback);
+        }
+
+        throw new InvalidOperationException($"Embedded {fileName} not found.");
     }
 }

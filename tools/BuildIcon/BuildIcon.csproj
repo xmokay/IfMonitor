@@ -8,8 +8,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="..\..\src\IfMonitor\IconArtwork.cs" Link="IconArtwork.cs" />
-  </ItemGroup>
-
 </Project>
