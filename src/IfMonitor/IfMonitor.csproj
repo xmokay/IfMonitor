@@ -12,6 +12,7 @@
     <AssemblyName>IfMonitor</AssemblyName>
     <Product>IfMonitor</Product>
     <Description>Network interface disconnect monitor</Description>
+    <Version>1.0.0</Version>
     <ApplicationIcon>Assets\IfMonitor.ico</ApplicationIcon>
   </PropertyGroup>
 

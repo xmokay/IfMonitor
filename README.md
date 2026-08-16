@@ -67,6 +67,17 @@ dotnet publish src/IfMonitor -c Release -r win-x64 --self-contained true -p:Publ
 
 Output: `publish\IfMonitor.exe`
 
+## GitHub Release
+
+Push a `v*` tag to build a self-contained `win-x64` exe and attach it to a GitHub Release (no .NET runtime install required):
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow uploads `IfMonitor-v1.0.0-win-x64.exe`. Pull requests and pushes to the default branch only compile; they do not create a release.
+
 ## Icon assets
 
 Branded icons live under [`src/IfMonitor/Assets/`](src/IfMonitor/Assets/):
