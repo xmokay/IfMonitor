@@ -23,6 +23,7 @@ That split only holds while **both** links are healthy. If one adapter drops, Wi
 - Detects both a disabled/unplugged adapter and an adapter that is still enabled with the cable unplugged (`MediaConnectState`)
 - Balloon tip per adapter when it goes missing or leaves the Up state
 - Tray icon blinks when any monitored adapter is unhealthy
+- **Linked adapter**: when any monitored NIC goes down, automatically disable a chosen adapter (SetupAPI; same as Device Manager). Optional auto-reenable when all monitored NICs recover
 - Optional recover notifications
 - Remembers selection in `%LocalAppData%\IfMonitor\config.json` and resumes monitoring on next launch
 - Optional run-at-startup (current-user `Run` registry value)
@@ -31,6 +32,7 @@ That split only holds while **both** links are healthy. If one adapter drops, Wi
 ## Requirements
 
 - Windows 10/11
+- **Administrator** — the app is marked `requireAdministrator` (UAC once at launch) so it can enable/disable the linked adapter
 - [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) for framework-dependent publishes
 - Or a self-contained publish (no runtime install needed)
 
@@ -40,13 +42,15 @@ That split only holds while **both** links are healthy. If one adapter drops, Wi
 dotnet run --project src/IfMonitor
 ```
 
-Find the shield icon in the system tray, then right-click:
+Find the NIC icon in the system tray, then right-click:
 
-1. **Select adapters…** — check one or more NICs; monitoring starts after OK
-2. **Start monitoring** / **Stop monitoring**
-3. **Run at startup** / **Notify on recover**
-4. **Exit**
-
+1. **Select adapters…** — check one or more NICs to monitor
+2. **Select linked adapter…** — choose the adapter to disable when any monitored NIC drops (Clear removes it)
+3. **Auto-disable linked adapter** / **Auto-reenable linked adapter**
+4. **Enable linked adapter now** — manual restore if auto-reenable is off
+5. **Start monitoring** / **Stop monitoring**
+6. **Run at startup** / **Notify on recover**
+7. **Exit**
 ## Publish
 
 Framework-dependent single file (requires .NET 8 Desktop Runtime):
@@ -112,6 +116,10 @@ Path: `%LocalAppData%\IfMonitor\config.json`
 | Field | Meaning |
 |------|---------|
 | `adapters` | List of `{ "id", "name" }` to monitor |
+| `linkedAdapter` | Adapter `{ "id", "name" }` to disable when any monitored NIC is down |
+| `linkedDisableEnabled` | Auto-disable linked adapter (default: on when a linked adapter is set) |
+| `autoReenableLinked` | Re-enable linked adapter when all monitored NICs are up again (default: off) |
+| `linkedDisabledByApp` | Whether this app currently left the linked adapter disabled |
 | `isMonitoring` | If true, auto-start monitoring on launch |
 | `notifyOnRecover` | Notify when an adapter returns to Up |
 | `runAtStartup` | Startup preference |

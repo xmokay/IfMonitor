@@ -12,6 +12,10 @@ public sealed class MonitoredAdapter
 public sealed class AppConfig
 {
     public List<MonitoredAdapter> Adapters { get; set; } = [];
+    public MonitoredAdapter? LinkedAdapter { get; set; }
+    public bool LinkedDisableEnabled { get; set; } = true;
+    public bool AutoReenableLinked { get; set; }
+    public bool LinkedDisabledByApp { get; set; }
     public bool IsMonitoring { get; set; }
     public bool NotifyOnRecover { get; set; } = true;
     public bool RunAtStartup { get; set; }
@@ -51,9 +55,39 @@ public sealed class AppConfig
                 a.Name = a.Id;
             }
         }
+
+        if (LinkedAdapter is not null)
+        {
+            if (string.IsNullOrWhiteSpace(LinkedAdapter.Id))
+            {
+                LinkedAdapter = null;
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(LinkedAdapter.Name))
+                {
+                    LinkedAdapter.Name = LinkedAdapter.Id;
+                }
+
+                // Linked adapter must not also be a monitored adapter.
+                if (Adapters.Any(a => string.Equals(a.Id, LinkedAdapter.Id, StringComparison.OrdinalIgnoreCase)))
+                {
+                    LinkedAdapter = null;
+                    LinkedDisableEnabled = false;
+                }
+            }
+        }
+
+        if (LinkedAdapter is null)
+        {
+            LinkedDisableEnabled = false;
+        }
     }
 
     public bool HasAdapters => Adapters.Count > 0;
+
+    public bool HasLinkedAdapter =>
+        LinkedAdapter is not null && !string.IsNullOrWhiteSpace(LinkedAdapter.Id);
 }
 
 public static class ConfigStore
@@ -80,6 +114,7 @@ public static class ConfigStore
             }
 
             string json = File.ReadAllText(ConfigPath);
+            json = MigrateLegacyLinkedKeys(json);
             AppConfig config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? new AppConfig();
             config.Normalize();
             return config;
@@ -88,6 +123,16 @@ public static class ConfigStore
         {
             return new AppConfig();
         }
+    }
+
+    /// <summary>Maps old fail-over JSON keys to linked-adapter names.</summary>
+    private static string MigrateLegacyLinkedKeys(string json)
+    {
+        return json
+            .Replace("\"disableTarget\"", "\"linkedAdapter\"", StringComparison.Ordinal)
+            .Replace("\"disableTargetEnabled\"", "\"linkedDisableEnabled\"", StringComparison.Ordinal)
+            .Replace("\"autoReenableTarget\"", "\"autoReenableLinked\"", StringComparison.Ordinal)
+            .Replace("\"targetDisabledByApp\"", "\"linkedDisabledByApp\"", StringComparison.Ordinal);
     }
 
     public static void Save(AppConfig config)
