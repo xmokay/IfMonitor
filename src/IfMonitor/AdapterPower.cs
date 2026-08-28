@@ -23,6 +23,33 @@ public static class AdapterPower
     private const int ErrorNotDisableable = unchecked((int)0xE0000231);
     private const int KeyRead = 0x20019;
 
+    /// <summary>
+    /// Best-effort query of whether the adapter is currently administratively enabled,
+    /// using the live OS state (IF_ADMIN_STATUS) rather than any cached app flag.
+    /// Returns null when the state could not be determined (e.g. adapter missing).
+    /// </summary>
+    public static bool? TryGetAdminEnabled(string adapterId)
+    {
+        if (!Guid.TryParse(adapterId, out Guid guid))
+        {
+            return null;
+        }
+
+        if (NativeMethods.ConvertInterfaceGuidToLuid(guid, out ulong luid) != NativeMethods.NO_ERROR)
+        {
+            return null;
+        }
+
+        var row = new NativeMethods.MibIfRow2 { InterfaceLuid = luid };
+        if (NativeMethods.GetIfEntry2(ref row) != NativeMethods.NO_ERROR)
+        {
+            return null;
+        }
+
+        // IF_ADMIN_STATUS: 1 = up (enabled), 2 = down (disabled), 3 = testing.
+        return row.AdminStatus == 1;
+    }
+
     public static bool TrySetEnabled(string adapterId, bool enabled, out string error)
     {
         error = string.Empty;

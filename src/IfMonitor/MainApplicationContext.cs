@@ -376,6 +376,13 @@ public sealed class MainApplicationContext : ApplicationContext
             return;
         }
 
+        // The "disabled by app" flag is only updated on success and persisted across
+        // restarts; it can drift from the real device state (manual re-enable, a crash
+        // that skipped the exit-time restore, a driver reinstall, etc). Re-sync it against
+        // the live adapter status before deciding whether to act, so a stale "already
+        // disabled" flag never silently blocks a real disable.
+        RefreshLinkedDisabledFlag();
+
         bool unhealthy = _monitor.AnyUnhealthy();
         if (!force && _lastLinkedUnhealthy == unhealthy)
         {
@@ -392,6 +399,34 @@ public sealed class MainApplicationContext : ApplicationContext
         {
             RequestEnableLinked(manual: false);
         }
+    }
+
+    /// <summary>
+    /// Corrects <see cref="AppConfig.LinkedDisabledByApp"/> if it disagrees with the adapter's
+    /// live admin status. Leaves the flag untouched when the state can't be verified.
+    /// </summary>
+    private void RefreshLinkedDisabledFlag()
+    {
+        if (!_config.HasLinkedAdapter)
+        {
+            return;
+        }
+
+        bool? actuallyEnabled = AdapterPower.TryGetAdminEnabled(_config.LinkedAdapter!.Id);
+        if (actuallyEnabled is null)
+        {
+            return;
+        }
+
+        bool actuallyDisabled = !actuallyEnabled.Value;
+        if (_config.LinkedDisabledByApp == actuallyDisabled)
+        {
+            return;
+        }
+
+        _config.LinkedDisabledByApp = actuallyDisabled;
+        ConfigStore.Save(_config);
+        UpdateMenuState();
     }
 
     private void RequestDisableLinked()
