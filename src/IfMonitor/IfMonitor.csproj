@@ -19,6 +19,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets\icon.png" />
     <EmbeddedResource Include="Assets\icon-alert.png" />
+    <EmbeddedResource Include="Assets\icon-warn.png" />
   </ItemGroup>
 
   <Target Name="GenerateAppIcon" BeforeTargets="BeforeBuild">

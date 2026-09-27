@@ -5,18 +5,29 @@ using System.Runtime.InteropServices;
 
 namespace IfMonitor;
 
-/// <summary>Loads separate green/red NIC artwork PNGs (no runtime color replacement).</summary>
+public enum IconStyle
+{
+    Ok,
+    Alert,
+    Warn,
+}
+
+/// <summary>Loads separate green/red/orange NIC artwork PNGs (no runtime color replacement).</summary>
 public static class IconArtwork
 {
     private const string OkResourceName = "IfMonitor.Assets.icon.png";
     private const string AlertResourceName = "IfMonitor.Assets.icon-alert.png";
+    private const string WarnResourceName = "IfMonitor.Assets.icon-warn.png";
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr hIcon);
 
-    public static Icon ToIcon(int size, bool alert = false)
+    public static Icon ToIcon(int size, bool alert = false) =>
+        ToIcon(size, alert ? IconStyle.Alert : IconStyle.Ok);
+
+    public static Icon ToIcon(int size, IconStyle style)
     {
-        using var bmp = Render(size, alert);
+        using var bmp = Render(size, style);
         IntPtr handle = bmp.GetHicon();
         try
         {
@@ -29,9 +40,12 @@ public static class IconArtwork
         }
     }
 
-    public static Bitmap Render(int size, bool alert = false)
+    public static Bitmap Render(int size, bool alert = false) =>
+        Render(size, alert ? IconStyle.Alert : IconStyle.Ok);
+
+    public static Bitmap Render(int size, IconStyle style)
     {
-        using var source = LoadMaster(alert);
+        using var source = LoadMaster(style);
         var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bmp);
         g.Clear(Color.Transparent);
@@ -42,16 +56,21 @@ public static class IconArtwork
         return bmp;
     }
 
-    private static Bitmap LoadMaster(bool alert)
+    private static Bitmap LoadMaster(IconStyle style)
     {
-        string resource = alert ? AlertResourceName : OkResourceName;
+        (string resource, string fileName) = style switch
+        {
+            IconStyle.Alert => (AlertResourceName, "icon-alert.png"),
+            IconStyle.Warn => (WarnResourceName, "icon-warn.png"),
+            _ => (OkResourceName, "icon.png"),
+        };
+
         using Stream? stream = typeof(IconArtwork).Assembly.GetManifestResourceStream(resource);
         if (stream is not null)
         {
             return new Bitmap(stream);
         }
 
-        string fileName = alert ? "icon-alert.png" : "icon.png";
         string fallback = Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
         if (File.Exists(fallback))
         {

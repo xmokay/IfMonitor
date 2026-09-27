@@ -7,6 +7,7 @@ Directory.CreateDirectory(assets);
 
 string pngPath = Path.Combine(assets, "icon.png");
 string alertPngPath = Path.Combine(assets, "icon-alert.png");
+string warnPngPath = Path.Combine(assets, "icon-warn.png");
 string icoPath = Path.Combine(assets, "IfMonitor.ico");
 
 if (!File.Exists(pngPath))
@@ -16,9 +17,14 @@ if (!File.Exists(pngPath))
 }
 
 using var source = new Bitmap(pngPath);
-using (var alert = CreateAlertArtwork(source))
+using (var alert = RecolorArtwork(source, MapGreenToRed))
 {
     alert.Save(alertPngPath, ImageFormat.Png);
+}
+
+using (var warn = RecolorArtwork(source, MapGreenToOrange))
+{
+    warn.Save(warnPngPath, ImageFormat.Png);
 }
 
 int[] sizes = [16, 32, 48, 256];
@@ -69,20 +75,20 @@ await File.WriteAllBytesAsync(icoPath, iconStream.ToArray());
 Console.WriteLine($"Wrote {icoPath} from {pngPath} ({iconStream.Length} bytes)");
 return 0;
 
-static Bitmap CreateAlertArtwork(Bitmap source)
+static Bitmap RecolorArtwork(Bitmap source, Func<Color, Color> mapGreen)
 {
-    var alert = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+    var result = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
 
     for (int y = 0; y < source.Height; y++)
     {
         for (int x = 0; x < source.Width; x++)
         {
             Color pixel = source.GetPixel(x, y);
-            alert.SetPixel(x, y, IsGreen(pixel) ? MapGreenToRed(pixel) : pixel);
+            result.SetPixel(x, y, IsGreen(pixel) ? mapGreen(pixel) : pixel);
         }
     }
 
-    return alert;
+    return result;
 }
 
 static bool IsGreen(Color pixel)
@@ -101,5 +107,13 @@ static Color MapGreenToRed(Color pixel)
     int red = pixel.G;
     int green = pixel.G / 5;
     int blue = pixel.G / 5;
+    return Color.FromArgb(pixel.A, red, green, blue);
+}
+
+static Color MapGreenToOrange(Color pixel)
+{
+    int red = pixel.G;
+    int green = pixel.G * 2 / 3;
+    int blue = pixel.G / 6;
     return Color.FromArgb(pixel.A, red, green, blue);
 }

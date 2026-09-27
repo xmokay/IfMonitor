@@ -15,6 +15,8 @@ public sealed class MainApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _enableTargetNowItem;
     private readonly Icon _okIcon;
     private readonly Icon _alertIcon;
+    private readonly Icon _stoppedIcon;
+    private readonly Icon _linkedOffIcon;
     private readonly System.Windows.Forms.Timer _blinkTimer;
     private readonly TimeSpan _balloonCooldown = TimeSpan.FromSeconds(30);
     private readonly Dictionary<string, (AdapterHealth Health, DateTime Utc)> _lastBalloon = new(StringComparer.OrdinalIgnoreCase);
@@ -29,6 +31,8 @@ public sealed class MainApplicationContext : ApplicationContext
         _config = ConfigStore.Load();
         _okIcon = TrayIconFactory.CreateOk();
         _alertIcon = TrayIconFactory.CreateAlert();
+        _stoppedIcon = TrayIconFactory.CreateStopped();
+        _linkedOffIcon = TrayIconFactory.CreateLinkedOff();
 
         _blinkTimer = new System.Windows.Forms.Timer { Interval = 500 };
         _blinkTimer.Tick += OnBlinkTick;
@@ -139,7 +143,9 @@ public sealed class MainApplicationContext : ApplicationContext
             ? "idle"
             : _unhealthy
                 ? $"down {_monitor.UnhealthyCount()}/{_config.Adapters.Count}"
-                : "all up";
+                : _config.LinkedDisabledByApp
+                    ? "all up; linked off"
+                    : "all up";
 
         _tray.Text = Truncate($"IfMonitor — {summary} [{status}]", 63);
     }
@@ -153,6 +159,7 @@ public sealed class MainApplicationContext : ApplicationContext
         _autoDisableItem.Enabled = _config.HasLinkedAdapter;
         _autoReenableItem.Enabled = _config.HasLinkedAdapter;
         _enableTargetNowItem.Enabled = _config.HasLinkedAdapter && _config.LinkedDisabledByApp;
+        RefreshTrayIcon();
     }
 
     private void OnPickAdapter(object? sender, EventArgs e)
@@ -181,7 +188,7 @@ public sealed class MainApplicationContext : ApplicationContext
             return;
         }
 
-        StopAlertBlink();
+        _unhealthy = false;
         _config.Adapters = selected.ToList();
         _config.IsMonitoring = true;
         ConfigStore.Save(_config);
@@ -238,21 +245,14 @@ public sealed class MainApplicationContext : ApplicationContext
         }
 
         UpdateMenuState();
-        if (!_unhealthy)
-        {
-            _tray.Icon = _okIcon;
-        }
-
         RefreshTrayTooltip();
 
         string names = _config.Adapters.Count == 1
             ? _config.Adapters[0].Name
             : string.Join(", ", _config.Adapters.Select(a => a.Name));
-        _tray.ShowBalloonTip(
-            2000,
+        ShowNotice(
             "IfMonitor",
-            Truncate($"Monitoring {_config.Adapters.Count}: {names}", 120),
-            ToolTipIcon.None);
+            Truncate($"Monitoring {_config.Adapters.Count}: {names}", 120));
     }
 
     private void StopMonitoring(bool save)
@@ -264,16 +264,15 @@ public sealed class MainApplicationContext : ApplicationContext
             ConfigStore.Save(_config);
         }
 
-        StopAlertBlink();
-        SetTrayIdle();
-        UpdateMenuState();
-        RefreshTrayTooltip();
+        _unhealthy = false;
         _lastLinkedUnhealthy = null;
-
         if (_config.LinkedDisabledByApp)
         {
             RequestEnableLinked(manual: false);
         }
+
+        UpdateMenuState();
+        RefreshTrayTooltip();
     }
 
     private void OnToggleStartup(object? sender, EventArgs e)
@@ -355,18 +354,8 @@ public sealed class MainApplicationContext : ApplicationContext
 
     private void SyncAlertFromHealth()
     {
-        if (_monitor.IsRunning && _monitor.AnyUnhealthy())
-        {
-            StartAlertBlink();
-        }
-        else
-        {
-            StopAlertBlink();
-            if (_monitor.IsRunning)
-            {
-                _tray.Icon = _okIcon;
-            }
-        }
+        _unhealthy = _monitor.IsRunning && _monitor.AnyUnhealthy();
+        RefreshTrayIcon();
     }
 
     private void EvaluateLinkedDisable(bool force)
@@ -475,21 +464,16 @@ public sealed class MainApplicationContext : ApplicationContext
                     _config.LinkedDisabledByApp = !enable;
                     ConfigStore.Save(_config);
                     UpdateMenuState();
+                    RefreshTrayTooltip();
                     string action = enable ? "enabled" : "disabled";
-                    _tray.ShowBalloonTip(
-                        4000,
-                        "IfMonitor",
-                        $"Linked adapter \"{adapterName}\" {action}.",
-                        ToolTipIcon.None);
+                    ShowNotice("IfMonitor", $"Linked adapter \"{adapterName}\" {action}.");
                 }
                 else
                 {
                     string action = enable ? "enable" : "disable";
-                    _tray.ShowBalloonTip(
-                        5000,
+                    ShowNotice(
                         "IfMonitor",
-                        Truncate($"Failed to {action} \"{adapterName}\": {error}", 200),
-                        ToolTipIcon.None);
+                        Truncate($"Failed to {action} \"{adapterName}\": {error}", 200));
                     if (manual)
                     {
                         MessageBox.Show(
@@ -556,32 +540,48 @@ public sealed class MainApplicationContext : ApplicationContext
             _ => ("IfMonitor", $"Interface \"{e.AdapterName}\" status changed."),
         };
 
-        _tray.ShowBalloonTip(5000, title, text, ToolTipIcon.None);
+        ShowNotice(title, text);
     }
 
-    private void StartAlertBlink()
+    private void ShowNotice(string title, string text)
     {
-        _unhealthy = true;
-        _blinkPhase = false;
-        _tray.Icon = _alertIcon;
+        if (!AppNotificationIdentity.TryShowToast(title, text))
+        {
+            _tray.ShowBalloonTip(5000, title, text, ToolTipIcon.None);
+        }
+    }
+
+    private void RefreshTrayIcon()
+    {
+        if (!_monitor.IsRunning)
+        {
+            _blinkTimer.Stop();
+            _blinkPhase = false;
+            _tray.Icon = _stoppedIcon;
+            return;
+        }
+
+        if (!_unhealthy)
+        {
+            _blinkTimer.Stop();
+            _blinkPhase = false;
+            _tray.Icon = _config.LinkedDisabledByApp ? _linkedOffIcon : _okIcon;
+            return;
+        }
+
         if (!_blinkTimer.Enabled)
         {
+            _blinkPhase = false;
+            _tray.Icon = _alertIcon;
             _blinkTimer.Start();
         }
     }
 
-    private void StopAlertBlink()
-    {
-        _unhealthy = false;
-        _blinkTimer.Stop();
-        _blinkPhase = false;
-    }
-
     private void OnBlinkTick(object? sender, EventArgs e)
     {
-        if (!_unhealthy)
+        if (!_monitor.IsRunning || !_unhealthy)
         {
-            _blinkTimer.Stop();
+            RefreshTrayIcon();
             return;
         }
 
@@ -591,8 +591,8 @@ public sealed class MainApplicationContext : ApplicationContext
 
     private void SetTrayIdle()
     {
-        StopAlertBlink();
-        _tray.Icon = _okIcon;
+        _unhealthy = false;
+        RefreshTrayIcon();
     }
 
     protected override void ExitThreadCore()
@@ -612,6 +612,8 @@ public sealed class MainApplicationContext : ApplicationContext
         _tray.Dispose();
         _okIcon.Dispose();
         _alertIcon.Dispose();
+        _stoppedIcon.Dispose();
+        _linkedOffIcon.Dispose();
         base.ExitThreadCore();
     }
 
